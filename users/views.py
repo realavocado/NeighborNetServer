@@ -31,7 +31,7 @@ def user_login(request):
             user = authenticate(request, username=email, password=password)
             if user is not None:
                 login(request, user)
-                return HttpResponse({"message": "Login successful"}, status=200)
+                return JsonResponse({"message": "Login successful"}, status=200)
                 # return redirect('home')
     else:
         form = CustomUserLoginForm()
