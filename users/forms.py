@@ -12,6 +12,8 @@ class CustomUserCreationForm(UserCreationForm):
 
 
 class CustomUserLoginForm(AuthenticationForm):
+    username = forms.EmailField(label="Email", widget=forms.EmailInput(attrs={'autofocus': True}))
+
     class Meta:
         model = User
-        fields = ('email', 'password')
+        fields = ('username', 'password')

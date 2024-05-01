@@ -26,7 +26,9 @@ def user_login(request):
     if request.method == 'POST':
         form = CustomUserLoginForm(data=request.POST)
         if form.is_valid():
-            user = authenticate(username=form.cleaned_data['username'], password=form.cleaned_data['password'])
+            email = form.cleaned_data['username']  # 用户输入的电子邮件
+            password = form.cleaned_data['password']
+            user = authenticate(request, username=email, password=password)
             if user is not None:
                 login(request, user)
                 return redirect('home')
