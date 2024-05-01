@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, authenticate
 from .forms import CustomUserCreationForm, CustomUserLoginForm
@@ -26,12 +26,13 @@ def user_login(request):
     if request.method == 'POST':
         form = CustomUserLoginForm(data=request.POST)
         if form.is_valid():
-            email = form.cleaned_data['username']  # 用户输入的电子邮件
+            email = form.cleaned_data['username']
             password = form.cleaned_data['password']
             user = authenticate(request, username=email, password=password)
             if user is not None:
                 login(request, user)
-                return redirect('home')
+                return HttpResponse({"message": "Login successful"}, status=200)
+                # return redirect('home')
     else:
         form = CustomUserLoginForm()
     return render(request, 'registration/login.html', {'form': form})
