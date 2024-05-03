@@ -18,4 +18,6 @@ from django.urls import path
 
 urlpatterns = [
     path("test/", views.test),
+    path("get_message/", views.get_message),
+    path("post_message/", views.post_message),
 ]
