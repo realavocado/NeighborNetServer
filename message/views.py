@@ -1,11 +1,9 @@
 from django.http import HttpResponse
-from django.db import connection
 from django.http import JsonResponse
 from .models import Message, Thread
 from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import login_required
 import json
-
-from .utils import get_username_by_id
 
 # Create your views here.
 
@@ -15,6 +13,8 @@ def test(request):
 
 def get_message(request):
     # Query all messages from the Message model
+    # current_user_id = request.user.id
+    # print(current_user_id)
     threads = Thread.objects.all()
     
     # Serialize the queryset into JSON
@@ -31,12 +31,13 @@ def get_message(request):
             related_messages.append({
                 'id': message.mid,
                 'author_id': message.author_id.id,
-                'author': get_username_by_id(message.author_id.id),
+                'author': message.author_id.username,
                 'title': message.title,
                 'text': message.text,
                 'timestamp': message.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                 'latitude': message.latitude,
-                'longitude': message.longitude
+                'longitude': message.longitude,
+                'reply_to_username': message.reply_to_mid.author_id.username if message.reply_to_mid else '',
                 # Add more fields as needed
             })
         
@@ -54,7 +55,7 @@ def get_message(request):
             'title': first_message.title,
             'text': first_message.text,
             'author_id': first_message.author_id.id,
-            'author': get_username_by_id(first_message.author_id.id),
+            'author': first_message.author_id.username,
             'timestamp': first_message.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
             'latitude': first_message.latitude,
             'longitude': first_message.longitude,
