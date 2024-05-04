@@ -6,7 +6,7 @@ class CustomUser(AbstractUser):
     bio = models.TextField(blank=True, null=True)
     address = models.CharField(max_length=255, blank=True, null=True)
     image_url = models.CharField(max_length=255, blank=True, null=True)
-    email = models.EmailField(unique=True)  # 确保唯一性
+    email = models.EmailField(unique=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']

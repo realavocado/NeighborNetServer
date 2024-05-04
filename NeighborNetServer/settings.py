@@ -158,3 +158,5 @@ AUTHENTICATION_BACKENDS = [
     'users.backends.EmailBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
+
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
