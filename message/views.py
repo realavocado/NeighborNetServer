@@ -1,6 +1,6 @@
 from django.http import HttpResponse
 from django.http import JsonResponse
-from .models import Message, Thread
+from .models import Message, Thread, UsersCustomuser
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 import json
@@ -8,7 +8,15 @@ import json
 # Create your views here.
 
 def test(request):
-    return HttpResponse("Hello, world. You're at the polls list.")
+    c = UsersCustomuser.objects.all()
+    serialized_threads = []
+    for i in c:
+        serialized_threads.append({
+            'id': i.id,
+            'username': i.username,
+            'image_url': i.image_url,
+        })
+    return JsonResponse({'message': serialized_threads}, safe=False)
 
 
 def get_message(request):
@@ -28,6 +36,7 @@ def get_message(request):
             continue
 
         for message in reply_messages:
+            print(message.mid)
             related_messages.append({
                 'id': message.mid,
                 'author_id': message.author_id.id,
