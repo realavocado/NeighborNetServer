@@ -91,11 +91,34 @@ class Threadvisibletohood(models.Model):
 
 class Threadvisibletouser(models.Model):
     tid = models.OneToOneField(Thread, models.DO_NOTHING, db_column='tid', primary_key=True)
-    uid = models.ForeignKey('UsersCustomuser', models.DO_NOTHING, db_column='id', blank=True, null=True)
+    uid = models.ForeignKey('UsersCustomuser', models.DO_NOTHING, db_column='uid', blank=True, null=True)
 
     class Meta:
         managed = True
         db_table = 'threadvisibletouser'
+
+
+class UserFollowBlock(models.Model):
+    auto_id = models.AutoField(primary_key=True)
+    bid = models.ForeignKey(Block, models.DO_NOTHING, db_column='bid', blank=True, null=True)
+    uid = models.ForeignKey('UsersCustomuser', models.DO_NOTHING, db_column='uid', blank=True, null=True)
+    date_followed = models.DateField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'user_follow_block'
+
+
+class UserInBlock(models.Model):
+    auto_id = models.AutoField(primary_key=True)
+    bid = models.ForeignKey(Block, models.DO_NOTHING, db_column='bid', blank=True, null=True)
+    uid = models.ForeignKey('UsersCustomuser', models.DO_NOTHING, db_column='uid', blank=True, null=True)
+    date_joined = models.DateField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'user_in_block'
+
 
 class UsersCustomuser(models.Model):
     id = models.BigAutoField(primary_key=True)

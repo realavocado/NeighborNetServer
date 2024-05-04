@@ -8,34 +8,45 @@ import json
 
 def get_all_friends(request):
     # Get the current user's uid test
-    uid = 1
-    user_friends = []
-    friends = Friend.objects.filter(uid=uid)
-    for friend in friends:
-        # Add friend's uid and fid to the set
-        user_friends.append({
-            'id': friend.fid.id,
-            'username': friend.fid.username, 
-            'image_url': friend.fid.image_url})
+    if request.method == 'GET':
+        if request.user.is_authenticated:
+            uid = request.user.id
+            user_friends = []
+            friends = Friend.objects.filter(uid=uid)
+            for friend in friends:
+            # Add friend's uid and fid to the set
+                user_friends.append({
+                    'id': friend.fid.id,
+                    'username': friend.fid.username, 
+                    'image_url': friend.fid.image_url})
 
-    # Get all friends of the current user
-    return JsonResponse({'friends': user_friends})
+            # Get all friends of the current user
+            return JsonResponse({'friends': user_friends}, status=200)
+        
+        else:
+            return JsonResponse({'error': 'not authenticated user'}, status=401)
+    return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
 
 
 def get_follow_neigbors(request):
-    # Get the current user's uid test
-    uid = 1
-    user_neigbors = []
-    neigbors = Neighbor.objects.filter(uid=uid)
-    for neigbor in neigbors:
-        # Add friend's uid and fid to the set
-        user_neigbors.append({
-            'id': neigbor.nid.id,
-            'username': neigbor.nid.username, 
-            'image_url': neigbor.nid.image_url})
+    if request.method == 'GET':
+        if request.user.is_authenticated:
+            uid = request.user.id
+            user_neigbors = []
+            neigbors = Neighbor.objects.filter(uid=uid)
+            for neigbor in neigbors:
+                # Add friend's uid and fid to the set
+                user_neigbors.append({
+                    'id': neigbor.nid.id,
+                    'username': neigbor.nid.username, 
+                    'image_url': neigbor.nid.image_url})
 
-    # Get all friends of the current user
-    return JsonResponse({'neighbors': user_neigbors})
+            # Get all friends of the current user
+            return JsonResponse({'neighbors': user_neigbors}, status=200)
+        
+        else:
+            return JsonResponse({'error': 'not authenticated user'}, status=401)
+    return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
 
 
 def get_friend_request(request):
