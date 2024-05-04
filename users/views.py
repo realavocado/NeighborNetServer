@@ -29,9 +29,9 @@ def user_login(request):
     if request.method == 'POST':
         form = CustomUserLoginForm(data=request.POST)
         if form.is_valid():
-            username = form.cleaned_data['username']
+            email = form.cleaned_data['username']
             password = form.cleaned_data['password']
-            user = authenticate(request, username=username, password=password)
+            user = authenticate(request, username=email, password=password)
             if user is not None:
                 login(request, user)
                 return JsonResponse({"message": "Login successful"}, status=200)
@@ -43,11 +43,13 @@ def user_login(request):
     else:
         return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
 
+
 def is_login(request):
     if request.user.is_authenticated:
         return JsonResponse({"is_login": True})
     else:
         return JsonResponse({"is_login": False})
-    
+
+
 def home(request):
     return render(request, 'home.html')
