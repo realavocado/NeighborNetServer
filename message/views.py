@@ -38,6 +38,7 @@ def get_message(request):
                 'latitude': message.latitude,
                 'longitude': message.longitude,
                 'reply_to_username': message.reply_to_mid.author_id.username if message.reply_to_mid else '',
+                'image_url': message.author_id.image_url,
                 # Add more fields as needed
             })
         
@@ -59,6 +60,7 @@ def get_message(request):
             'timestamp': first_message.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
             'latitude': first_message.latitude,
             'longitude': first_message.longitude,
+            'image_url': first_message.author_id.image_url,
             # related messages
             'related_messages': json.dumps(related_messages),
         })
