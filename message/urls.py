@@ -20,4 +20,5 @@ urlpatterns = [
     path("test/", views.test),
     path("get_message/", views.get_message),
     path("post_message/", views.post_message),
+    path("post_thread/", views.post_thread),
 ]

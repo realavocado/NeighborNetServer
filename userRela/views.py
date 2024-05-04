@@ -17,7 +17,8 @@ def get_all_friends(request):
             # Add friend's uid and fid to the set
                 user_friends.append({
                     'id': friend.fid.id,
-                    'username': friend.fid.username, 
+                    'username': friend.fid.username,  
+                    'full_name': friend.fid.first_name + ' ' + friend.fid.last_name,
                     'image_url': friend.fid.image_url})
 
             # Get all friends of the current user
@@ -39,6 +40,7 @@ def get_follow_neigbors(request):
                 user_neigbors.append({
                     'id': neigbor.nid.id,
                     'username': neigbor.nid.username, 
+                    'full_name': neigbor.nid.first_name + ' ' + neigbor.nid.last_name,
                     'image_url': neigbor.nid.image_url})
 
             # Get all friends of the current user
