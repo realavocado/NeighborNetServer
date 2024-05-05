@@ -213,7 +213,6 @@ def post_thread(request):
             if date and time:
                 timestamp = datetime.datetime.strptime(
                     date + ' ' + time, '%Y-%m-%d %H:%M')
-            print('timestamp', timestamp)
             message = Message.objects.create(
                 title=title, text=text, latitude=latitude, longitude=longitude,
                 author_id=usr, tid=thread, timestamp=timestamp)

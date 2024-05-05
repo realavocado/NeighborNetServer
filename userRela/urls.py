@@ -19,10 +19,12 @@ from django.urls import path
 urlpatterns = [
     path("friends/", views.get_all_friends),
     path("neighbors/", views.get_follow_neigbors),
-    path("all_neighbors/", views.get_all_neighbors),
+    # path("all_neighbors/", views.get_all_neighbors),
     path("get_friend_request/", views.get_friend_request),
     path("add_friend/", views.add_friend),
+    path("accept_friend/", views.accept_friend),
+    path("reject_friend/", views.reject_friend),
     path("follow_neighbor/", views.follow_neighbor),
-    path("remove_friend/", views.remove_friend),
-    path("unfollow_neighbor/", views.unfollow_neighbor),
+    # path("remove_friend/", views.remove_friend),
+    # path("unfollow_neighbor/", views.unfollow_neighbor),
 ]
