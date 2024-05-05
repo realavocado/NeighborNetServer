@@ -44,7 +44,7 @@ def user_login(request):
         return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
 
 
-def is_login(request):
+def is_logged_in(request):
     if request.user.is_authenticated:
         return JsonResponse({"is_login": True})
     else:

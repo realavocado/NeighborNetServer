@@ -8,5 +8,5 @@ urlpatterns = [
     path('logout/', auth_views.LogoutView.as_view(next_page='home'), name='logout'),
     path('set_csrf_token/', views.set_csrf_token, name='set_csrf_token'),
     path('', views.home, name='home'),
-    path('is_login/', views.is_login, name='is_login'),
+    path('is_logged_in/', views.is_logged_in, name='is_logged_in'),
 ]
