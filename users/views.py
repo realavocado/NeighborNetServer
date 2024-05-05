@@ -64,7 +64,7 @@ def is_logged_in(request):
             }
         })
     else:
-        return JsonResponse({"is_login": False})
+        return JsonResponse({"is_logged_in": False})
 
 
 def home(request):
