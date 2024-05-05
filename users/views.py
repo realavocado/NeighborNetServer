@@ -34,7 +34,15 @@ def user_login(request):
             user = authenticate(request, username=email, password=password)
             if user is not None:
                 login(request, user)
-                return JsonResponse({"message": "Login successful"}, status=200)
+                return JsonResponse({
+                    "message": "Login successful",
+                    "user": {
+                        "userId": user.id,
+                        "full_name": user.get_full_name(),
+                        'username': user.username,
+                        "email": user.email
+                    }
+                }, status=200)
             else:
                 return JsonResponse({"error": "Invalid username or password"}, status=401)
         else:
@@ -46,7 +54,15 @@ def user_login(request):
 
 def is_logged_in(request):
     if request.user.is_authenticated:
-        return JsonResponse({"is_login": True})
+        return JsonResponse({
+            "is_logged_in": True,
+            "user": {
+                "userId": request.user.id,
+                "full_name": request.user.get_full_name(),
+                'username': request.user.username,
+                "email": request.user.email
+            }
+        })
     else:
         return JsonResponse({"is_login": False})
 
