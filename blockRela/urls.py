@@ -18,6 +18,9 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path("blocks/", views.get_all_blocks),
+    path("now_block/", views.now_block),
+    path("all_follow_block/", views.all_follow_block),
     path("follow_block/", views.follow_block),
     path("apply_block/", views.apply_block),
     path("leave_block/", views.leave_block),

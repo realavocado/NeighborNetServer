@@ -1,6 +1,7 @@
 from django.http import HttpResponse
 from django.http import JsonResponse
 from .models import Friend, Neighbor, Friendrequest, UsersCustomuser
+from message.utils import get_user_block
 import json
 import datetime
 
@@ -106,6 +107,7 @@ def accept_friend(request):
             fsr = UsersCustomuser.objects.filter(id=fid).first()
             if fsr and usr:
                 # Add friend's uid and fid to the set
+                
                 friend = Friend(uid=usr, fid=fsr)
                 friend.save()
                 friend = Friend(fid=usr, uid=fsr)
@@ -153,6 +155,8 @@ def follow_neighbor(request):
             usr = UsersCustomuser.objects.filter(id=request.user.id).first()
             nsr = UsersCustomuser.objects.filter(username=username).first()
             if nsr and usr:
+                if get_user_block(usr.id) != get_user_block(nsr.id):
+                    return JsonResponse({'error': 'cannot not follow user in different block'}, status=400)
                 # Add friend's uid and fid to the set
                 neighbor = Neighbor(uid=usr, nid=nsr)
                 neighbor.save()
