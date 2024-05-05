@@ -1,11 +1,13 @@
 from django.http import HttpResponse
 from django.http import JsonResponse
 from .models import Message, Thread, UsersCustomuser, \
+    Block, Hood, \
     Threadvisibletoblock, Threadvisibletohood, Threadvisibletouser
 from .utils import get_user_block, get_user_hood, get_threads_tuples, \
     get_user_follow_block
 import json
-
+import datetime
+import pytz
 # Create your views here.
 
 
@@ -84,7 +86,7 @@ def get_all_message(request):
 def get_message(request):
     if request.method == 'GET':
         if request.user.is_authenticated:
-        # if True:
+            # if True:
             # print('id',request.user.id)
             # print('username',request.user.username)
             userid = request.user.id
@@ -93,7 +95,8 @@ def get_message(request):
             serialized_threads = []
 
             # Query all threads that user write
-            threads_writer = Thread.objects.filter(author_id=userid).order_by('-tid')
+            threads_writer = Thread.objects.filter(
+                author_id=userid).order_by('-tid')
             serialized_threads += get_threads_tuples(threads_writer, True)
 
             # Query all threads that in user's block but not write by user
@@ -101,29 +104,31 @@ def get_message(request):
                 threads_joinBlock = Thread.objects.filter(
                     visibility='block',
                     threadvisibletoblock__bid=get_user_block(userid))\
-                        .exclude(author_id=userid).order_by('-tid')
-                serialized_threads += get_threads_tuples(threads_joinBlock, True)
+                    .exclude(author_id=userid).order_by('-tid')
+                serialized_threads += get_threads_tuples(
+                    threads_joinBlock, True)
 
             # Query all threads that in user's hood but not write by user
             if get_user_hood(userid):
                 threads_joinHood = Thread.objects.filter(
                     visibility='neighborhood',
                     threadvisibletohood__hid=get_user_hood(userid))\
-                        .exclude(author_id=userid).order_by('-tid')
-                serialized_threads += get_threads_tuples(threads_joinHood, True)
-            
+                    .exclude(author_id=userid).order_by('-tid')
+                serialized_threads += get_threads_tuples(
+                    threads_joinHood, True)
+
             # Query all threads that private to the user but not write by user
             threads_private = Thread.objects.filter(
                 visibility='private',
                 threadvisibletouser__uid=userid)\
-                    .exclude(author_id=userid).order_by('-tid')
+                .exclude(author_id=userid).order_by('-tid')
             serialized_threads += get_threads_tuples(threads_private, True)
 
             # Query all threads that user follow other Block
             if get_user_follow_block(userid):
                 threads_follow = Thread.objects.filter(
                     visibility='block',
-                    threadvisibletoblock__bid__in = get_user_follow_block(userid))\
+                    threadvisibletoblock__bid__in=get_user_follow_block(userid))\
                     .exclude(author_id=userid).order_by('-tid')
                 serialized_threads += get_threads_tuples(threads_follow, False)
 
@@ -135,16 +140,82 @@ def get_message(request):
         return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
 
 
-# @csrf_exempt
 def post_message(request):
+    eastern = pytz.timezone('America/New_York')
     if request.method == 'POST':
-        data = json.loads(request.body)
-        content = data.get('content', '')
-        if content:
-            return JsonResponse({'content': content})
-            # message = Message.objects.create(content=content)
-            # return JsonResponse({'id': message.id, 'content': message.content, 'created_at': message.created_at})
-        else:
-            return JsonResponse({'error': 'Content is required'}, status=400)
-    else:
-        return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
+        if request.user.is_authenticated:
+            data = json.loads(request.body)
+            tid = data.get('tid', None)
+            reply_to_mid = data.get('reply_to_mid', None)
+            title = data.get('title', '')
+            text = data.get('text', '')
+            latitude = data.get('latitude', None)
+            longitude = data.get('longitude', None)
+
+            if tid:
+                author_id = request.user.id
+                usr = UsersCustomuser.objects.filter(id=author_id).first()
+                if tid:
+                    tid = Thread.objects.filter(tid=tid).first()
+                if reply_to_mid:
+                    reply_to_mid = Message.objects.filter(
+                        mid=reply_to_mid).first()
+                message = Message.objects.create(
+                    title=title, text=text, latitude=latitude, longitude=longitude,
+                    author_id=usr, reply_to_mid=reply_to_mid, tid=tid, timestamp=datetime.datetime.now(eastern))
+                return JsonResponse({'id': message.mid, 'title': message.title, 'text': message.text, 'latitude': message.latitude, 'longitude': message.longitude, 'author_id': message.author_id.id, 'reply_to_mid': message.reply_to_mid.mid if message.reply_to_mid else None, 'tid': message.tid.tid if message.tid else None, 'created_at': message.timestamp})
+            else:
+                return JsonResponse({'error': 'Title and text are required'}, status=400)
+        return JsonResponse({'error': 'User not authenticated'}, status=401)
+    return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
+
+
+def post_thread(request):
+    eastern = pytz.timezone('America/New_York')
+    if request.method == 'POST':
+        if request.user.is_authenticated:
+            data = json.loads(request.body)
+            # create a new thread
+            topic = data.get('title', '')
+            subject = data.get('subject', '')
+            author_id = request.user.id
+            visibility = data.get('visibility', '')
+            receiver_id = data.get('receiver', None)
+            if visibility in ['friend', 'neighbor']:
+                visibility = 'private'
+
+            usr = UsersCustomuser.objects.filter(id=author_id).first()
+            thread = Thread.objects.create(
+                topic=topic, subject=subject, visibility=visibility, author_id=usr)
+
+            if visibility == 'private' and receiver_id:
+                receiver = UsersCustomuser.objects.filter(
+                    id=receiver_id).first()
+                tu = Threadvisibletouser.objects.create(
+                    tid=thread, uid=receiver)
+            if visibility == 'block':
+                block = Block.objects.filter(
+                    bid=get_user_block(author_id)).first()
+                tb = Threadvisibletoblock.objects.create(tid=thread, bid=block)
+            if visibility == 'neighborhood':
+                hood = Hood.objects.filter(
+                    hid=get_user_hood(author_id)).first()
+                th = Threadvisibletohood.objects.create(tid=thread, hid=hood)
+
+            # create a new message
+            title = data.get('title', '')
+            text = data.get('text', '')
+            latitude = data.get('latitude', None)
+            longitude = data.get('longitude', None)
+            date = data.get('date', None)
+            time = data.get('time', None)
+            timestamp = datetime.datetime.now(eastern)
+            if date and time:
+                timestamp = datetime.datetime.strptime(
+                    date + ' ' + time, '%Y-%m-%d %H:%M')
+            message = Message.objects.create(
+                title=title, text=text, latitude=latitude, longitude=longitude,
+                author_id=usr, tid=thread, timestamp=timestamp)
+            return JsonResponse({'tid': thread.tid, 'topic': thread.topic, 'subject': thread.subject, 'visibility': thread.visibility, 'author_id': thread.author_id.id})
+        return JsonResponse({'error': 'User not authenticated'}, status=401)
+    return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)

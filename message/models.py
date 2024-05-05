@@ -51,7 +51,7 @@ class Message(models.Model):
 class Review(models.Model):
     auto_id = models.AutoField(primary_key=True)
     mid = models.ForeignKey(Message, models.DO_NOTHING, db_column='mid', blank=True, null=True)
-    uid = models.ForeignKey('UsersCustomuser', models.DO_NOTHING, db_column='id', blank=True, null=True)
+    uid = models.ForeignKey('UsersCustomuser', models.DO_NOTHING, db_column='uid', blank=True, null=True)
     status = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
@@ -63,7 +63,7 @@ class Thread(models.Model):
     tid = models.AutoField(primary_key=True)
     topic = models.CharField(max_length=100, blank=True, null=True)
     subject = models.CharField(max_length=100, blank=True, null=True)
-    author_id = models.IntegerField(blank=True, null=True)
+    author_id = models.ForeignKey('UsersCustomuser', models.DO_NOTHING, db_column='author_id', blank=True, null=True)
     visibility = models.CharField(max_length=50, blank=True, null=True)
 
     class Meta:
