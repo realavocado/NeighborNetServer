@@ -7,6 +7,7 @@
 # Feel free to rename the models, but don't rename db_table values or field names.
 from django.db import models
 
+
 class Block(models.Model):
     bid = models.AutoField(primary_key=True)
     block_name = models.CharField(max_length=100, blank=True, null=True)
