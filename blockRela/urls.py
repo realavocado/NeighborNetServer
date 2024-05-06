@@ -24,6 +24,6 @@ urlpatterns = [
     path("follow_block/", views.follow_block_sql),
     path("apply_block/", views.apply_block_sql),
     path("leave_block/", views.leave_block_sql),
-    path("get_block_requests/", views.get_block_requests),
-    path("approve_block_request/", views.approve_block_request),
+    path("get_block_requests/", views.get_block_requests_sql),
+    path("approve_block_request/", views.approve_block_request_sql),
 ]

@@ -5,7 +5,8 @@ from .models import Message, Thread, UsersCustomuser, \
     Block, Hood, \
     Threadvisibletoblock, Threadvisibletohood, Threadvisibletouser
 from .utils import get_user_block, get_user_hood, get_threads_tuples, \
-    get_user_follow_block
+    get_user_follow_block, get_threads_tuples_sql, get_user_block_sql, \
+    get_user_hood_sql, get_user_follow_block_sql
 import json
 import datetime
 import pytz
@@ -181,99 +182,6 @@ def get_message(request):
         return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
 
 
-def get_message_sql(request):
-    if request.method == 'GET':
-        if request.user.is_authenticated:
-            userid = request.user.id
-            serialized_threads = []
-
-            # SQL to get threads by the user
-            sql = '''
-            SELECT * FROM thread WHERE author_id = %s ORDER BY tid DESC
-            '''
-            with connection.cursor() as cursor:
-                cursor.execute(sql, [userid])
-                threads_writer = cursor.fetchall()
-
-            # Convert each thread to a serialized form
-            for thread in threads_writer:
-                serialized_threads.append({
-                    'tid': thread[0],
-                    'topic': thread[1],
-                    'subject': thread[2],
-                    'visibility': thread[3],
-                    'author_id': thread[4]
-                })
-
-            # Add more SQL queries for threads in user's block, hood, and private threads
-            # Example for threads in user's block:
-            block_id = get_user_block(userid)
-            if block_id:
-                sql = '''
-                SELECT * FROM thread WHERE visibility = 'block' AND threadvisibletoblock.bid = %s AND author_id != %s ORDER BY tid DESC
-                '''
-                with connection.cursor() as cursor:
-                    cursor.execute(sql, [block_id, userid])
-                    threads_block = cursor.fetchall()
-                    # Process results and append to serialized_threads
-                    for thread in threads_block:
-                        serialized_threads.append({
-                            'tid': thread[0],
-                            'topic': thread[1],
-                            'subject': thread[2],
-                            'visibility': thread[3],
-                            'author_id': thread[4]
-                        })
-
-            # Query all threads in the user's hood but not written by the user
-            hood_id = get_user_hood(userid)  # This should return the hood ID for the user
-            if hood_id:
-                sql_hood = '''
-                SELECT tid, topic, subject, visibility, author_id FROM thread
-                JOIN threadvisibletohood ON thread.tid = threadvisibletohood.tid
-                WHERE visibility = 'neighborhood' AND threadvisibletohood.hid = %s AND author_id != %s
-                ORDER BY tid DESC
-                '''
-                cursor.execute(sql_hood, [hood_id, userid])
-                threads_hood = cursor.fetchall()
-
-                # Process results and append to serialized_threads
-                for thread in threads_hood:
-                    serialized_threads.append({
-                        'tid': thread[0],
-                        'topic': thread[1],
-                        'subject': thread[2],
-                        'visibility': thread[3],
-                        'author_id': thread[4]
-                    })
-
-            # Query all private threads visible to the user but not written by the user
-            sql_private = '''
-            SELECT tid, topic, subject, visibility, author_id FROM thread
-            JOIN threadvisibletouser ON thread.tid = threadvisibletouser.tid
-            WHERE visibility = 'private' AND threadvisibletouser.uid = %s AND author_id != %s
-            ORDER BY tid DESC
-            '''
-            cursor.execute(sql_private, [userid, userid])
-            threads_private = cursor.fetchall()
-
-            # Process results and append to serialized_threads
-            for thread in threads_private:
-                serialized_threads.append({
-                    'tid': thread[0],
-                    'topic': thread[1],
-                    'subject': thread[2],
-                    'visibility': thread[3],
-                    'author_id': thread[4]
-                })
-
-            return JsonResponse({'message': serialized_threads}, safe=False)
-        else:
-            return JsonResponse({'error': 'User not authenticated'}, status=401)
-    else:
-        return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
-
-
 def post_message(request):
     eastern = pytz.timezone('America/New_York')
     if request.method == 'POST':
@@ -306,36 +214,6 @@ def post_message(request):
                 return JsonResponse({'error': 'Title and text are required'}, status=400)
         return JsonResponse({'error': 'User not authenticated'}, status=401)
     return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
-
-
-def post_message_sql(request):
-    if request.method == 'POST':
-        if request.user.is_authenticated:
-            data = json.loads(request.body)
-            title = data.get('title', '')
-            text = data.get('text', '')
-            tid = data.get('tid', None)
-            reply_to_mid = data.get('reply_to_mid', None)
-            latitude = data.get('latitude', None)
-            longitude = data.get('longitude', None)
-            timestamp = datetime.datetime.now(pytz.timezone('America/New_York'))
-
-            sql = '''
-            INSERT INTO message (title, text, tid, reply_to_mid, latitude, longitude, author_id, timestamp)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING mid
-            '''
-            with connection.cursor() as cursor:
-                cursor.execute(sql, [title, text, tid, reply_to_mid, latitude, longitude, request.user.id, timestamp])
-                mid = cursor.fetchone()[0]
-
-            return JsonResponse({'id': mid, 'title': title, 'text': text, 'latitude': latitude, 'longitude': longitude,
-                                 'author_id': request.user.id, 'reply_to_mid': reply_to_mid, 'tid': tid,
-                                 'timestamp': timestamp})
-        else:
-            return JsonResponse({'error': 'User not authenticated'}, status=401)
-    else:
-        return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
 
 def post_thread(request):
@@ -391,6 +269,138 @@ def post_thread(request):
     return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
 
+
+# SQL version 
+def get_message_sql(request):
+    if request.method == 'GET':
+        if request.user.is_authenticated:
+            userid = request.user.id
+            serialized_threads = []
+
+            # SQL to get threads by the user
+            sql = '''
+            SELECT *
+            FROM thread WHERE author_id = %s ORDER BY tid DESC
+            '''
+            with connection.cursor() as cursor:
+                cursor.execute(sql, [userid])
+                threads_writer = cursor.fetchall()
+                serialized_threads += get_threads_tuples_sql(threads_writer, True)
+            
+            # print(serialized_threads)
+
+
+            # Add more SQL queries for threads in user's block, hood, and private threads
+            # Example for threads in user's block:
+            block_id = get_user_block_sql(userid)
+            if block_id:
+                sql = '''
+                SELECT * 
+                FROM thread 
+                INNER JOIN threadvisibletoblock ON thread.tid = threadvisibletoblock.tid
+                WHERE visibility = 'block' 
+                AND threadvisibletoblock.bid = %s 
+                AND author_id != %s ORDER BY thread.tid DESC
+                '''
+                with connection.cursor() as cursor:
+                    cursor.execute(sql, [block_id, userid])
+                    threads_block = cursor.fetchall()
+                    serialized_threads += get_threads_tuples_sql(threads_block, True)
+
+            # Query all threads in the user's hood but not written by the user
+            hood_id = get_user_hood_sql(userid)  # This should return the hood ID for the user
+            if hood_id:
+                sql_hood = '''
+                SELECT *
+                FROM thread
+                JOIN threadvisibletohood ON thread.tid = threadvisibletohood.tid
+                WHERE visibility = 'neighborhood' AND threadvisibletohood.hid = %s AND author_id != %s
+                ORDER BY thread.tid DESC
+                '''
+                with connection.cursor() as cursor:
+                    cursor.execute(sql_hood, [hood_id, userid])
+                    threads_hood = cursor.fetchall()
+                    serialized_threads += get_threads_tuples_sql(threads_hood, True)
+            
+
+            # Query all private threads visible to the user but not written by the user
+            sql_private = '''
+            SELECT *
+            FROM thread
+            JOIN threadvisibletouser ON thread.tid = threadvisibletouser.tid
+            WHERE visibility = 'private' AND threadvisibletouser.uid = %s AND author_id != %s
+            ORDER BY thread.tid DESC
+            '''
+            with connection.cursor() as cursor:
+                cursor.execute(sql_private, [userid, userid])
+                threads_private = cursor.fetchall()
+                serialized_threads += get_threads_tuples_sql(threads_private, True)
+
+            # Query all threads that user follows in other blocks
+            if get_user_follow_block_sql(userid):
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT t.* 
+                        FROM thread t
+                        INNER JOIN threadvisibletoblock tb ON t.tid = tb.tid
+                        WHERE t.visibility = 'block' 
+                        AND tb.bid IN %s 
+                        AND t.author_id != %s 
+                        ORDER BY t.tid DESC
+                    """, [tuple(get_user_follow_block_sql(userid)), userid])
+                    threads_follow = cursor.fetchall()
+                    serialized_threads += get_threads_tuples_sql(threads_follow, False)
+            
+            return JsonResponse({'message': serialized_threads}, safe=False)
+        else:
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+    else:
+        return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
+
+
+def post_message_sql(request):
+    if request.method == 'POST':
+        if request.user.is_authenticated:
+            data = json.loads(request.body)
+            title = data.get('title', '')
+            text = data.get('text', '')
+            tid = data.get('tid', None)
+            reply_to_mid = data.get('reply_to_mid', None)
+            latitude = data.get('latitude', None)
+            longitude = data.get('longitude', None)
+            timestamp = datetime.datetime.now(pytz.timezone('America/New_York'))
+
+            # check if the thread exists
+            if tid:
+                sql_tid = '''
+                SELECT * FROM thread WHERE tid = %s
+                '''
+                with connection.cursor() as cursor:
+                    cursor.execute(sql_tid, [tid])
+                    thread = cursor.fetchone()
+                    if not thread:
+                        return JsonResponse({'error': 'Thread not found'}, status=404)
+            else:
+                return JsonResponse({'error': 'Thread ID is required'}, status=400)
+
+            sql = '''
+            INSERT INTO message (title, text, tid, reply_to_mid, latitude, longitude, author_id, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING mid
+            '''
+            with connection.cursor() as cursor:
+                cursor.execute(sql, [title, text, tid, reply_to_mid, latitude, longitude, request.user.id, timestamp])
+                mid = cursor.fetchone()
+
+            return JsonResponse({'id': mid, 'title': title, 'text': text, 'latitude': latitude, 'longitude': longitude,
+                                 'author_id': request.user.id, 'reply_to_mid': reply_to_mid, 'tid': tid,
+                                 'timestamp': timestamp})
+        else:
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+    else:
+        return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
+
+
 def post_thread_sql(request):
     eastern = pytz.timezone('America/New_York')
     if request.method == 'POST':
@@ -431,25 +441,28 @@ def post_thread_sql(request):
                 INSERT INTO threadvisibletouser (tid, uid)
                 VALUES (%s, %s)
                 '''
-                cursor.execute(sql_private, [tid, receiver_id])
+                with connection.cursor() as cursor:
+                    cursor.execute(sql_private, [tid, receiver_id])
 
             if visibility == 'block':
-                block_id = get_user_block(author_id)  # Assuming this function fetches the block ID
+                block_id = get_user_block_sql(author_id)  # Assuming this function fetches the block ID
                 if block_id:
                     sql_block = '''
                     INSERT INTO threadvisibletoblock (tid, bid)
                     VALUES (%s, %s)
                     '''
-                    cursor.execute(sql_block, [tid, block_id])
+                    with connection.cursor() as cursor:
+                        cursor.execute(sql_block, [tid, block_id])
 
             if visibility == 'neighborhood':
-                hood_id = get_user_hood(author_id)  # Assuming this function fetches the hood ID
+                hood_id = get_user_hood_sql(author_id)  # Assuming this function fetches the hood ID
                 if hood_id:
                     sql_hood = '''
                     INSERT INTO threadvisibletohood (tid, hid)
                     VALUES (%s, %s)
                     '''
-                    cursor.execute(sql_hood, [tid, hood_id])
+                    with connection.cursor() as cursor:
+                        cursor.execute(sql_hood, [tid, hood_id])
 
             # Create a new message
             sql_message = '''
@@ -457,11 +470,12 @@ def post_thread_sql(request):
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING mid
             '''
-            cursor.execute(sql_message, [title, text, latitude, longitude, author_id, tid, timestamp])
-            mid = cursor.fetchone()[0]  # Get the message ID from the INSERT
+            with connection.cursor() as cursor:
+                cursor.execute(sql_message, [title, text, latitude, longitude, author_id, tid, timestamp])
+                mid = cursor.fetchone()[0]  # Get the message ID from the INSERT
 
             return JsonResponse(
-                {'tid': tid, 'topic': topic, 'subject': subject, 'visibility': visibility, 'author_id': author_id})
+                {'tid': tid, 'topic': topic, 'subject': subject, 'visibility': visibility, 'author_id': author_id, 'mid': mid})
         else:
             return JsonResponse({'error': 'User not authenticated'}, status=401)
     else:

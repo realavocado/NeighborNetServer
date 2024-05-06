@@ -426,9 +426,6 @@ def leave_block_sql(request):
     return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
 
-from django.db import connection
-from django.http import JsonResponse
-
 def get_block_requests_sql(request):
     if request.method == 'GET':
         if request.user.is_authenticated:
@@ -439,22 +436,23 @@ def get_block_requests_sql(request):
                 cursor.execute(
                     """
                     SELECT 
-                        u.id,
+                        DISTINCT u.id,
                         u.username,
                         u.image_url
                     FROM 
                         users_customuser u
                     INNER JOIN 
-                        user_in_block b ON u.id = b.uid
+                        block_user_status_change b ON u.id = b.uid
                     LEFT JOIN 
-                        blockjoinapprove a ON b.bid = a.bid_id AND u.id = a.uid_id
+                        blockjoinapprove a ON b.bid = a.bid AND u.id = a.uid
                     WHERE 
-
-                        b.bid_id = %s
+                        b.status = 'pending'
                     AND 
-                        (a.id IS NULL OR a.approve_uid_id != %s)
+                        b.bid = %s
+                    AND 
+                        (a.auto_id IS NULL OR a.approve_uid != %s)
                     """,
-                    [request.user.id, request.user.id]
+                    [get_user_block(request.user.id), request.user.id]
                 )
                 rows = cursor.fetchall()
 
@@ -469,3 +467,61 @@ def get_block_requests_sql(request):
         else:
             return JsonResponse({'error': 'not authenticated user'}, status=401)
     return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
+
+
+def approve_block_request_sql(request):
+    if request.method == 'POST':
+        if request.user.is_authenticated:
+            data = json.loads(request.body)
+            uid = data.get('id', None)
+            bid = get_user_block(request.user.id)
+
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT * 
+                    FROM users_customuser 
+                    WHERE id = %s
+                    """,
+                    [uid]
+                )
+                user = cursor.fetchone()
+
+                cursor.execute(
+                    """
+                    SELECT * 
+                    FROM block 
+                    WHERE bid = %s
+                    """,
+                    [bid]
+                )
+                block = cursor.fetchone()
+
+                cursor.execute(
+                    """
+                    SELECT * 
+                    FROM blockjoinapprove 
+                    WHERE bid = %s AND uid = %s AND approve_uid = %s
+                    """,
+                    [bid, uid, request.user.id]
+                )
+                approve = cursor.fetchone()
+
+                if user is None or block is None:
+                    return JsonResponse({'status': 'denied', 'message': 'user or block not exist'}, status=200)
+
+                if approve is None:
+                    cursor.execute(
+                        """
+                        INSERT INTO blockjoinapprove (bid, uid, approve_uid)
+                        VALUES (%s, %s, %s)
+                        """,
+                        [bid, uid, request.user.id]
+                    )
+                    user_join_block(uid, bid)
+                    return JsonResponse({'status': 'success', 'message': 'success approved'}, status=200)
+
+                user_join_block(uid, bid)
+                return JsonResponse({'status': 'denied', 'message': 'already approved'}, status=200)
+        else:
+            return JsonResponse({'error': 'not authenticated user'}, status=401)
