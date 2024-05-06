@@ -5,6 +5,7 @@ from .models import Block, UsersCustomuser, \
 from message.utils import get_user_block
 import datetime
 import json
+from django.db import connection
 
 
 def get_all_blocks(request):
@@ -233,3 +234,238 @@ def approve_block_request(request):
             return JsonResponse({'status': 'denied', 'message': 'already approved'}, status=200)
         else:
             return JsonResponse({'error': 'not authenticated user'}, status=401)
+
+
+# SQL version
+def get_all_blocks_sql(request):
+    if request.method == 'GET':
+        if request.user.is_authenticated:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT bid, block_name FROM block")
+                rows = cursor.fetchall()
+                user_blocks = [{'id': row[0], 'name': row[1]} for row in rows]
+                return JsonResponse({'blocks': user_blocks}, status=200)
+        else:
+            return JsonResponse({'error': 'not authenticated user'}, status=401)
+    return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
+
+
+def now_block_sql(request):
+    if request.method == 'GET':
+        if request.user.is_authenticated:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT block.bid, block_name FROM user_in_block INNER JOIN block ON user_in_block.bid = block.bid WHERE uid = %s LIMIT 1", [request.user.id])
+                row = cursor.fetchone()
+                if row is None:
+                    return JsonResponse({'status': False, 'message': 'not in any block'}, status=200)
+                else:
+                    return JsonResponse({'status': True, 'message': 'in block', 'block_name': row[1], 'bid': row[0]}, status=200)
+        else:
+            return JsonResponse({'error': 'not authenticated user'}, status=401)
+    return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
+
+
+def all_follow_block_sql(request):
+    if request.method == 'GET':
+        if request.user.is_authenticated:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT bf.bid, b.block_name FROM user_follow_block bf INNER JOIN block b ON bf.bid = b.bid WHERE bf.uid = %s",
+                    [request.user.id]
+                )
+                rows = cursor.fetchall()
+                user_blocks = [{'id': row[0], 'name': row[1]} for row in rows]
+                return JsonResponse({'blocks': user_blocks}, status=200)
+        else:
+            return JsonResponse({'error': 'not authenticated user'}, status=401)
+    return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
+
+
+def follow_block_sql(request):
+    print(request.method)
+    if request.method == 'POST':
+        if request.user.is_authenticated:
+            data = json.loads(request.body)
+            block_name = data.get('block_name', None)
+            
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT * FROM block WHERE block_name = %s
+                """, [block_name])
+                bk = cursor.fetchone()
+
+            
+            if bk:
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT * FROM block_user_status_change 
+                        WHERE bid = %s AND uid = %s
+                    """, [bk[0], request.user.id])
+                    block = cursor.fetchone()
+                
+                if not block:
+                    
+                    try:
+                        with connection.cursor() as cursor:
+                            cursor.execute("""
+                            INSERT INTO block_user_status_change (bid, uid, status, date) 
+                            VALUES (%s, %s, 'follow', %s)
+                        """, [bk[0], request.user.id, datetime.date.today()])
+                    except Exception as e:
+                        print(e)
+                    
+
+                    print('block', block)
+                    
+                    with connection.cursor() as cursor:
+                        cursor.execute("""
+                            INSERT INTO user_follow_block (bid, uid, date_followed) 
+                            VALUES (%s, %s, %s)
+                        """, [bk[0], request.user.id, datetime.date.today()])
+                    
+                    return JsonResponse({'status': 'success', 'message': 'success followed block'}, status=200)
+                else:
+                    if block[3] == 'follow':
+                        return JsonResponse({'status': 'denied', 'message': 'already followed block'}, status=200)
+                    elif block[3] == 'join':
+                        return JsonResponse({'status': 'denied', 'message': 'already joined block'}, status=200)
+                    elif block[3] == 'pending':
+                        return JsonResponse({'status': 'denied', 'message': 'You have already asked for join!'}, status=200)
+            else:
+                return JsonResponse({'error': 'Block not found'}, status=404)
+        else:
+            return JsonResponse({'error': 'not authenticated user'}, status=401)
+    return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
+
+
+def apply_block_sql(request):
+    if request.method == 'POST':
+        if request.user.is_authenticated:
+            data = json.loads(request.body)
+            block_name = data.get('block_name', None)
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT * FROM block WHERE block_name = %s", [block_name])
+                bk = cursor.fetchone()
+                if bk:
+                    # check if user already in block
+                    cursor.execute("SELECT * FROM user_in_block WHERE uid = %s", [request.user.id])
+                    bk_join = cursor.fetchone()
+                    if bk_join:
+                        return JsonResponse({'status': 'denied', 'message': 'already in block'}, status=200)
+                    
+                    # check if user already applied to join another block
+                    cursor.execute("SELECT * FROM block_user_status_change WHERE uid = %s AND status = 'pending' AND bid != %s", [request.user.id, bk[0]])
+                    bk_pending = cursor.fetchone()
+                    if bk_pending:
+                        return JsonResponse({'status': 'denied', 'message': 'already applied to join another block'}, status=200)
+
+                    # check user status
+                    cursor.execute("SELECT * FROM block_user_status_change WHERE bid = %s AND uid = %s", [bk[0], request.user.id])
+                    block = cursor.fetchone()
+                    if not block:
+                        cursor.execute("INSERT INTO block_user_status_change (bid, uid, status, date) VALUES (%s, %s, %s, %s)", [bk[0], request.user.id, 'pending', datetime.date.today()])
+                        user_join_block(request.user.id, bk[0])
+                    else:
+                        if block[3] == 'follow':
+                            cursor.execute("UPDATE block_user_status_change SET status = 'pending', date = %s WHERE bid = %s AND uid = %s", [datetime.date.today(), bk[0], request.user.id])
+                            user_join_block(request.user.id, bk[0])
+                            return JsonResponse({'status': 'success', 'message': 'You followed block before, Now you want to join it'}, status=200)
+                        elif block[3] == 'join':
+                            return JsonResponse({'status': 'denied', 'message': 'already joined block'}, status=200)
+                        elif block[3] == 'pending':
+                            return JsonResponse({'status': 'denied', 'message': 'You have already asked to join!'}, status=200)
+                        elif block[3] == 'leave':
+                            cursor.execute("UPDATE block_user_status_change SET status = 'pending', date = %s WHERE bid = %s AND uid = %s", [datetime.date.today(), bk[0], request.user.id])
+                            user_join_block(request.user.id, bk[0])
+                            return JsonResponse({'status': 'success', 'message': 'You left block before, Now you want to join it'}, status=200)
+                    return JsonResponse({'status': 'success', 'message': 'Successfully applied to join block'}, status=200)
+                else:
+                    return JsonResponse({'error': 'Block not found'}, status=404)
+        else:
+            return JsonResponse({'error': 'not authenticated user'}, status=401)
+    return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
+
+
+def leave_block_sql(request):
+    if request.method == 'POST':
+        if request.user.is_authenticated:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT bid FROM user_in_block WHERE uid = %s", [request.user.id]
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return JsonResponse({'status': 'denied', 'message': 'not in any block'}, status=200)
+                
+                bid = row[0]
+
+                cursor.execute(
+                    "SELECT status FROM block_user_status_change WHERE bid = %s AND uid = %s", [bid, request.user.id]
+                )
+                bs_row = cursor.fetchone()
+                if not bs_row:
+                    return JsonResponse({'status': 'denied', 'message': 'no data in database'}, status=200)
+
+                bs_status = bs_row[0]
+                if bs_status == 'follow':
+                    return JsonResponse({'status': 'denied', 'message': 'you are following this block, not in block'}, status=200)
+                elif bs_status == 'join':
+                    cursor.execute(
+                        "UPDATE block_user_status_change SET status = 'leave', date = %s WHERE bid = %s AND uid = %s", [datetime.date.today(), bid, request.user.id]
+                    )
+                    cursor.execute(
+                        "DELETE FROM user_in_block WHERE bid = %s AND uid = %s", [bid, request.user.id]
+                    )
+                elif bs_status == 'pending':
+                    return JsonResponse({'status': 'denied', 'message': 'not in block, now status is pending'}, status=200)
+                else:
+                    return JsonResponse({'status': 'denied', 'message': 'not in block'}, status=200)
+                return JsonResponse({'status': 'success', 'message': 'success leave block'}, status=200)
+        else:
+            return JsonResponse({'error': 'not authenticated user'}, status=401)
+    return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
+
+
+from django.db import connection
+from django.http import JsonResponse
+
+def get_block_requests_sql(request):
+    if request.method == 'GET':
+        if request.user.is_authenticated:
+            user_requests = []
+
+            # Raw SQL query to fetch block requests
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT 
+                        u.id,
+                        u.username,
+                        u.image_url
+                    FROM 
+                        users_customuser u
+                    INNER JOIN 
+                        user_in_block b ON u.id = b.uid
+                    LEFT JOIN 
+                        blockjoinapprove a ON b.bid = a.bid_id AND u.id = a.uid_id
+                    WHERE 
+
+                        b.bid_id = %s
+                    AND 
+                        (a.id IS NULL OR a.approve_uid_id != %s)
+                    """,
+                    [request.user.id, request.user.id]
+                )
+                rows = cursor.fetchall()
+
+                for row in rows:
+                    user_requests.append({
+                        'id': row[0],
+                        'username': row[1],
+                        'image_url': row[2],
+                    })
+
+            return JsonResponse({'requests': user_requests}, status=200)
+        else:
+            return JsonResponse({'error': 'not authenticated user'}, status=401)
+    return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)

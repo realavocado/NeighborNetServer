@@ -63,7 +63,7 @@ class UserFollowBlock(models.Model):
     date_followed = models.DateField(blank=True, null=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'user_follow_block'
 
 

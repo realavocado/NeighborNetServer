@@ -18,12 +18,12 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path("blocks/", views.get_all_blocks),
-    path("now_block/", views.now_block),
-    path("all_follow_block/", views.all_follow_block),
-    path("follow_block/", views.follow_block),
-    path("apply_block/", views.apply_block),
-    path("leave_block/", views.leave_block),
+    path("blocks/", views.get_all_blocks_sql),
+    path("now_block/", views.now_block_sql),
+    path("all_follow_block/", views.all_follow_block_sql),
+    path("follow_block/", views.follow_block_sql),
+    path("apply_block/", views.apply_block_sql),
+    path("leave_block/", views.leave_block_sql),
     path("get_block_requests/", views.get_block_requests),
     path("approve_block_request/", views.approve_block_request),
 ]
