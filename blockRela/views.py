@@ -2,7 +2,7 @@ from django.http import HttpResponse
 from django.http import JsonResponse
 from .models import Block, UsersCustomuser, \
     BlockUserStatusChange, UserFollowBlock, UserInBlock, Blockjoinapprove
-from message.utils import get_user_block
+from message.utils import get_user_block, get_user_block_sql
 import datetime
 import json
 from django.db import connection
@@ -364,11 +364,11 @@ def apply_block_sql(request):
                     block = cursor.fetchone()
                     if not block:
                         cursor.execute("INSERT INTO block_user_status_change (bid, uid, status, date) VALUES (%s, %s, %s, %s)", [bk[0], request.user.id, 'pending', datetime.date.today()])
-                        user_join_block(request.user.id, bk[0])
+                        user_join_block_sql(request.user.id, bk[0])
                     else:
                         if block[3] == 'follow':
                             cursor.execute("UPDATE block_user_status_change SET status = 'pending', date = %s WHERE bid = %s AND uid = %s", [datetime.date.today(), bk[0], request.user.id])
-                            user_join_block(request.user.id, bk[0])
+                            user_join_block_sql(request.user.id, bk[0])
                             return JsonResponse({'status': 'success', 'message': 'You followed block before, Now you want to join it'}, status=200)
                         elif block[3] == 'join':
                             return JsonResponse({'status': 'denied', 'message': 'already joined block'}, status=200)
@@ -376,7 +376,7 @@ def apply_block_sql(request):
                             return JsonResponse({'status': 'denied', 'message': 'You have already asked to join!'}, status=200)
                         elif block[3] == 'leave':
                             cursor.execute("UPDATE block_user_status_change SET status = 'pending', date = %s WHERE bid = %s AND uid = %s", [datetime.date.today(), bk[0], request.user.id])
-                            user_join_block(request.user.id, bk[0])
+                            user_join_block_sql(request.user.id, bk[0])
                             return JsonResponse({'status': 'success', 'message': 'You left block before, Now you want to join it'}, status=200)
                     return JsonResponse({'status': 'success', 'message': 'Successfully applied to join block'}, status=200)
                 else:
@@ -452,7 +452,7 @@ def get_block_requests_sql(request):
                     AND 
                         (a.auto_id IS NULL OR a.approve_uid != %s)
                     """,
-                    [get_user_block(request.user.id), request.user.id]
+                    [get_user_block_sql(request.user.id), request.user.id]
                 )
                 rows = cursor.fetchall()
 
@@ -474,7 +474,7 @@ def approve_block_request_sql(request):
         if request.user.is_authenticated:
             data = json.loads(request.body)
             uid = data.get('id', None)
-            bid = get_user_block(request.user.id)
+            bid = get_user_block_sql(request.user.id)
 
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -518,10 +518,56 @@ def approve_block_request_sql(request):
                         """,
                         [bid, uid, request.user.id]
                     )
-                    user_join_block(uid, bid)
+                    user_join_block_sql(uid, bid)
                     return JsonResponse({'status': 'success', 'message': 'success approved'}, status=200)
 
-                user_join_block(uid, bid)
+                user_join_block_sql(uid, bid)
                 return JsonResponse({'status': 'denied', 'message': 'already approved'}, status=200)
         else:
             return JsonResponse({'error': 'not authenticated user'}, status=401)
+
+
+def check_join_sql(uid, bid):
+    with connection.cursor() as cursor:
+        # Count the number of users already in the block
+        cursor.execute("SELECT COUNT(*) FROM user_in_block WHERE bid = %s", [bid])
+        user_already_in_block_count = cursor.fetchone()[0]
+
+        # Count the number of approvals for the user
+        cursor.execute("SELECT COUNT(*) FROM blockjoinapprove WHERE bid = %s AND uid = %s", [bid, uid])
+        user_approve_count = cursor.fetchone()[0]
+
+        # no user in block now, uid can join
+        if user_already_in_block_count == 0:
+            return True
+        
+        # user num less than 3
+        if user_already_in_block_count < 3:
+            if user_approve_count == user_already_in_block_count:
+                return True
+            return False
+        
+        # user num more than 3
+        if user_approve_count >= 3:
+            return True
+
+        return False
+
+
+def user_join_block_sql(uid, bid):
+    if check_join(uid, bid):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO user_in_block (bid, uid, date_joined) VALUES (%s, %s, %s)",
+                [bid, uid, datetime.date.today()]
+            )
+
+            cursor.execute(
+                "UPDATE block_user_status_change SET status = 'join', date = %s WHERE bid = %s AND uid = %s",
+                [datetime.date.today(), bid, uid]
+            )
+
+            cursor.execute(
+                "DELETE FROM blockjoinapprove WHERE bid = %s AND uid = %s",
+                [bid, uid]
+            )

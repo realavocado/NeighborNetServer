@@ -19,8 +19,8 @@ class Friend(models.Model):
 
 class Friendrequest(models.Model):
     request_id = models.AutoField(primary_key=True)
-    requester = models.ForeignKey('UsersCustomuser', models.DO_NOTHING, related_name='requester', blank=True, null=True)
-    receiver = models.ForeignKey('UsersCustomuser', models.DO_NOTHING, related_name='receiver', blank=True, null=True)
+    requester = models.ForeignKey('UsersCustomuser', models.DO_NOTHING, db_column='requester_id',related_name='requester', blank=True, null=True)
+    receiver = models.ForeignKey('UsersCustomuser', models.DO_NOTHING, db_column='receiver_id',related_name='receiver', blank=True, null=True)
     status = models.CharField(max_length=10, blank=True, null=True)
     request_date = models.DateTimeField(blank=True, null=True)
 
