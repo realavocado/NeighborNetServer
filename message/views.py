@@ -1,3 +1,6 @@
+import re
+
+from django.db.models import Q
 from django.http import HttpResponse
 from django.http import JsonResponse
 from django.db import connection
@@ -331,7 +334,6 @@ def post_thread(request):
     return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
 
-
 # SQL version
 def get_message_sql(request):
     if request.method == 'GET':
@@ -400,6 +402,7 @@ def get_message_sql(request):
 
             # Query all threads that user follows in other blocks
             if get_user_follow_block_sql(userid):
+                print(tuple(get_user_follow_block_sql(userid)))
                 with connection.cursor() as cursor:
                     cursor.execute("""
                         SELECT t.* 
@@ -417,6 +420,69 @@ def get_message_sql(request):
                     serialized_threads += get_threads_tuples_sql(threads_follow, False)
 
             return JsonResponse({'message': serialized_threads}, safe=False)
+        else:
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+    else:
+        return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
+
+
+def get_message_with_keywords_sql(request):
+    if request.method == 'GET':
+        if request.user.is_authenticated:
+            user_id = request.user.id
+            keyword = request.GET.get('keyword', '')
+
+            if not keyword:
+                return JsonResponse({'error': 'Missing "keyword" field'}, status=400)
+
+            query = """
+            WITH
+            messages_by_tvu AS (
+                SELECT m.*, u.username, u.image_url FROM Message m
+                JOIN Threadvisibletouser t ON m.tid = t.tid
+                JOIN Users_Customuser u ON m.author_id = u.id
+                WHERE t.uid = %s AND m.text ILIKE %s OR m.title ILIKE %s
+            ),
+            messages_by_tvb AS (
+                SELECT m.*, u.username, u.image_url FROM Message m
+                JOIN Threadvisibletoblock t ON m.tid = t.tid
+                JOIN User_In_Block ub ON t.bid = ub.bid
+                JOIN Users_Customuser u ON m.author_id = u.id
+                WHERE ub.uid = %s AND m.text ILIKE %s OR m.title ILIKE %s
+            ),
+            messages_by_tvh AS (
+                SELECT m.*, u.username, u.image_url FROM Message m
+                JOIN Threadvisibletohood t ON m.tid = t.tid
+                JOIN Block b ON t.hid = b.hid
+                JOIN User_In_Block ub ON b.bid = ub.bid
+                JOIN Users_Customuser u ON m.author_id = u.id
+                WHERE ub.uid = %s AND m.text ILIKE %s OR m.title ILIKE %s
+            ),
+            messages_from_friends AS (
+                SELECT m.*, u.username, u.image_url FROM Message m
+                JOIN Thread t ON m.tid = t.tid
+                JOIN Friend f ON t.author_id = f.fid
+                JOIN Users_Customuser u ON m.author_id = u.id
+                WHERE f.uid = %s AND t.visibility = 'friends' AND m.text ILIKE %s OR m.title ILIKE %s
+            )
+            SELECT * FROM messages_by_tvu
+            UNION
+            SELECT * FROM messages_by_tvb
+            UNION
+            SELECT * FROM messages_by_tvh
+            UNION
+            SELECT * FROM messages_from_friends;
+            """
+
+            # Preparing parameters for the query
+            params = [user_id, f"%{keyword}%", f"%{keyword}%", user_id, f"%{keyword}%", f"%{keyword}%", user_id, f"%{keyword}%", f"%{keyword}%", user_id, f"%{keyword}%", f"%{keyword}%"]
+
+            with connection.cursor() as cursor:
+                cursor.execute(query, params)
+                columns = [col[0] for col in cursor.description]
+                message_list = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+            return JsonResponse(message_list, safe=False)
         else:
             return JsonResponse({'error': 'User not authenticated'}, status=401)
     else:
@@ -540,7 +606,8 @@ def post_thread_sql(request):
                 mid = cursor.fetchone()[0]  # Get the message ID from the INSERT
 
             return JsonResponse(
-                {'tid': tid, 'topic': topic, 'subject': subject, 'visibility': visibility, 'author_id': author_id, 'mid': mid})
+                {'tid': tid, 'topic': topic, 'subject': subject, 'visibility': visibility, 'author_id': author_id,
+                 'mid': mid})
         else:
             return JsonResponse({'error': 'User not authenticated'}, status=401)
     else:
