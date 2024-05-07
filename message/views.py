@@ -406,10 +406,13 @@ def get_message_sql(request):
                         FROM thread t
                         INNER JOIN threadvisibletoblock tb ON t.tid = tb.tid
                         WHERE t.visibility = 'block' 
-                        AND tb.bid IN %s 
+                        AND tb.bid IN (
+                            SELECT bid FROM user_follow_block WHERE uid = %s
+                        )
                         AND t.author_id != %s 
                         ORDER BY t.tid DESC
-                    """, [tuple(get_user_follow_block_sql(userid)), userid])
+                    """, [userid, userid])
+                    
                     threads_follow = cursor.fetchall()
                     serialized_threads += get_threads_tuples_sql(threads_follow, False)
 
