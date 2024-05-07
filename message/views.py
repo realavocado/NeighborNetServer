@@ -3,7 +3,8 @@ from django.http import JsonResponse
 from django.db import connection
 from .models import Message, Thread, UsersCustomuser, \
     Block, Hood, \
-    Threadvisibletoblock, Threadvisibletohood, Threadvisibletouser
+    Threadvisibletoblock, Threadvisibletohood, Threadvisibletouser, UserInBlock
+from userRela.models import Friend
 from .utils import get_user_block, get_user_hood, get_threads_tuples, \
     get_user_follow_block, get_threads_tuples_sql, get_user_block_sql, \
     get_user_hood_sql, get_user_follow_block_sql
@@ -182,6 +183,67 @@ def get_message(request):
         return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
 
 
+def get_message_with_keywords(request):
+    if request.method == 'GET':
+        if request.user.is_authenticated:
+            user_id = request.user.id
+            try:
+                # data = json.loads(request.body)
+                keyword = request.GET.get('keyword', '')
+            except json.JSONDecodeError:
+                return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+            if not keyword:
+                return JsonResponse({'error': 'Missing "keyword" field'}, status=400)
+
+            # query 1：private messages from another user
+            messages_by_tvu = Message.objects.filter(
+                tid__in=Threadvisibletouser.objects.filter(uid=user_id).values('tid'),
+                text__icontains=keyword
+            )
+
+            # query 2：messages from the block
+            messages_by_tvb = Message.objects.filter(
+                tid__in=Threadvisibletoblock.objects.filter(
+                    bid__in=UserInBlock.objects.filter(uid=user_id).values('bid')
+                ).values('tid'),
+                text__icontains=keyword
+            )
+
+            # query 4：messages from the hood
+            messages_by_tvh = Message.objects.filter(
+                tid__in=Threadvisibletohood.objects.filter(
+                    hid__in=Block.objects.filter(
+                        bid__in=UserInBlock.objects.filter(uid=user_id).values('bid')
+                    ).values('hid')
+                ).values('tid'),
+                text__icontains=keyword
+            )
+
+            # query 4：messages from friends
+            messages_from_friends = Message.objects.filter(
+                tid__in=Thread.objects.filter(
+                    author_id__in=Friend.objects.filter(uid=user_id).values('fid'),
+                    visibility='friends'
+                ).values('tid'),
+                text__icontains=keyword
+            )
+
+            # union all query results
+            messages = messages_by_tvu.union(
+                messages_by_tvb,
+                messages_by_tvh,
+                messages_from_friends
+            )
+
+            message_list = list(messages.values())
+            return JsonResponse(message_list, safe=False)
+        else:
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+    else:
+        return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
+
+
 def post_message(request):
     eastern = pytz.timezone('America/New_York')
     if request.method == 'POST':
@@ -270,7 +332,7 @@ def post_thread(request):
 
 
 
-# SQL version 
+# SQL version
 def get_message_sql(request):
     if request.method == 'GET':
         if request.user.is_authenticated:
@@ -286,7 +348,7 @@ def get_message_sql(request):
                 cursor.execute(sql, [userid])
                 threads_writer = cursor.fetchall()
                 serialized_threads += get_threads_tuples_sql(threads_writer, True)
-            
+
             # print(serialized_threads)
 
 
@@ -321,7 +383,7 @@ def get_message_sql(request):
                     cursor.execute(sql_hood, [hood_id, userid])
                     threads_hood = cursor.fetchall()
                     serialized_threads += get_threads_tuples_sql(threads_hood, True)
-            
+
 
             # Query all private threads visible to the user but not written by the user
             sql_private = '''
@@ -350,7 +412,7 @@ def get_message_sql(request):
                     """, [tuple(get_user_follow_block_sql(userid)), userid])
                     threads_follow = cursor.fetchall()
                     serialized_threads += get_threads_tuples_sql(threads_follow, False)
-            
+
             return JsonResponse({'message': serialized_threads}, safe=False)
         else:
             return JsonResponse({'error': 'User not authenticated'}, status=401)

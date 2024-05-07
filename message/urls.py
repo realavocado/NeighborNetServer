@@ -19,6 +19,7 @@ from django.urls import path
 urlpatterns = [
     path("test/", views.test),
     path("get_message/", views.get_message_sql),
+    path("get_message_with_keywords/", views.get_message_with_keywords),
     path("post_message/", views.post_message_sql),
     path("post_thread/", views.post_thread_sql),
 ]
