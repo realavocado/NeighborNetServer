@@ -437,18 +437,23 @@ def get_message_with_keywords_sql(request):
 
             query = """
             WITH
+            messages_by_myself AS (
+                SELECT m.*, u.username, u.image_url FROM Message m
+                JOIN Users_Customuser u ON m.author_id = u.id
+                WHERE m.author_id = %s AND (m.text ILIKE %s OR m.title ILIKE %s)
+             ),
             messages_by_tvu AS (
                 SELECT m.*, u.username, u.image_url FROM Message m
                 JOIN Threadvisibletouser t ON m.tid = t.tid
                 JOIN Users_Customuser u ON m.author_id = u.id
-                WHERE t.uid = %s AND m.text ILIKE %s OR m.title ILIKE %s
+                WHERE t.uid = %s AND (m.text ILIKE %s OR m.title ILIKE %s)
             ),
             messages_by_tvb AS (
                 SELECT m.*, u.username, u.image_url FROM Message m
                 JOIN Threadvisibletoblock t ON m.tid = t.tid
                 JOIN User_In_Block ub ON t.bid = ub.bid
                 JOIN Users_Customuser u ON m.author_id = u.id
-                WHERE ub.uid = %s AND m.text ILIKE %s OR m.title ILIKE %s
+                WHERE ub.uid = %s AND (m.text ILIKE %s OR m.title ILIKE %s)
             ),
             messages_by_tvh AS (
                 SELECT m.*, u.username, u.image_url FROM Message m
@@ -456,15 +461,17 @@ def get_message_with_keywords_sql(request):
                 JOIN Block b ON t.hid = b.hid
                 JOIN User_In_Block ub ON b.bid = ub.bid
                 JOIN Users_Customuser u ON m.author_id = u.id
-                WHERE ub.uid = %s AND m.text ILIKE %s OR m.title ILIKE %s
+                WHERE ub.uid = %s AND (m.text ILIKE %s OR m.title ILIKE %s)
             ),
             messages_from_friends AS (
                 SELECT m.*, u.username, u.image_url FROM Message m
                 JOIN Thread t ON m.tid = t.tid
                 JOIN Friend f ON t.author_id = f.fid
                 JOIN Users_Customuser u ON m.author_id = u.id
-                WHERE f.uid = %s AND t.visibility = 'friends' AND m.text ILIKE %s OR m.title ILIKE %s
+                WHERE f.uid = %s AND t.visibility = 'friends' AND (m.text ILIKE %s OR m.title ILIKE %s)
             )
+            SELECT * FROM messages_by_myself
+            UNION
             SELECT * FROM messages_by_tvu
             UNION
             SELECT * FROM messages_by_tvb
@@ -475,7 +482,7 @@ def get_message_with_keywords_sql(request):
             """
 
             # Preparing parameters for the query
-            params = [user_id, f"%{keyword}%", f"%{keyword}%", user_id, f"%{keyword}%", f"%{keyword}%", user_id, f"%{keyword}%", f"%{keyword}%", user_id, f"%{keyword}%", f"%{keyword}%"]
+            params = [user_id, f"%{keyword}%", f"%{keyword}%", user_id, f"%{keyword}%", f"%{keyword}%", user_id, f"%{keyword}%", f"%{keyword}%", user_id, f"%{keyword}%", f"%{keyword}%", user_id, f"%{keyword}%", f"%{keyword}%"]
 
             with connection.cursor() as cursor:
                 cursor.execute(query, params)

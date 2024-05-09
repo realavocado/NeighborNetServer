@@ -12,7 +12,7 @@ def register(request):
     if request.method == 'POST':
         form = CustomUserCreationForm(request.POST)
         if form.is_valid():
-            form.save()
+            user = form.save()
         else:
             errors = form.errors.as_json()
             return JsonResponse({"errors": errors}, status=400)
