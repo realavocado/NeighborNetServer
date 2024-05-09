@@ -415,7 +415,9 @@ def follow_neighbor_sql(request):
             # Fetch the user's block
             with connection.cursor() as cursor:
                 cursor.execute("SELECT bid FROM user_in_block WHERE uid = %s", [usr_id])
-                usr_block = cursor.fetchone()[0]
+                usr_block = cursor.fetchone()[0] if cursor.rowcount > 0 else None
+                if not usr_block:
+                    return JsonResponse({'error': 'Username not found or this user not in your block'}, status=404)
 
             # Fetch the neighbor's block
             with connection.cursor() as cursor:
