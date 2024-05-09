@@ -1,3 +1,5 @@
+import json
+
 from django.http import HttpResponse, JsonResponse, HttpRequest
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -40,7 +42,9 @@ def user_login(request):
                         "userId": user.id,
                         "full_name": user.get_full_name(),
                         'username': user.username,
-                        "email": user.email
+                        "email": user.email,
+                        "address": user.address,
+                        "bio": user.bio
                     }
                 }, status=200)
             else:
@@ -60,11 +64,43 @@ def is_logged_in(request):
                 "userId": request.user.id,
                 "full_name": request.user.get_full_name(),
                 'username': request.user.username,
-                "email": request.user.email
+                "email": request.user.email,
+                "address": request.user.address,
+                "bio": request.user.bio
             }
         })
     else:
         return JsonResponse({"is_logged_in": False})
+
+
+def update_user_info(request):
+    if request.method == 'POST':
+        body_unicode = request.body.decode('utf-8')
+        body_data = json.loads(body_unicode)
+
+        username = body_data.get('username')
+        address = body_data.get('address')
+        bio = body_data.get('bio')
+
+        user = request.user
+
+        user.username = username
+        user.address = address
+        user.bio = bio
+        user.save()
+        return JsonResponse({
+            'success': 'User profile updated successfully',
+            "user": {
+                "userId": user.id,
+                "full_name": user.get_full_name(),
+                'username': user.username,
+                "email": user.email,
+                "address": user.address,
+                "bio": user.bio
+            }
+        }, status=201)
+    else:
+        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
 
 
 def home(request):

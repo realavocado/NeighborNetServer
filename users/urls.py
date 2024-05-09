@@ -9,4 +9,5 @@ urlpatterns = [
     path('set_csrf_token/', views.set_csrf_token, name='set_csrf_token'),
     path('', views.home, name='home'),
     path('is_logged_in/', views.is_logged_in, name='is_logged_in'),
+    path('update_user_info/', views.update_user_info, name='update_user_info'),
 ]
