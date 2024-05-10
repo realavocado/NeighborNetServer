@@ -451,8 +451,23 @@ def get_block_requests_sql(request):
                         b.bid = %s
                     AND 
                         (a.auto_id IS NULL OR a.approve_uid != %s)
+                    AND u.id not IN
+                        (SELECT 
+                            DISTINCT u.id
+                        FROM 
+                            users_customuser u
+                        INNER JOIN 
+                            block_user_status_change b ON u.id = b.uid
+                        LEFT JOIN 
+                            blockjoinapprove a ON b.bid = a.bid AND u.id = a.uid
+                        WHERE 
+                            b.status = 'pending'
+                        AND 
+                            b.bid = %s
+                        AND 
+                            a.approve_uid = %s)
                     """,
-                    [get_user_block_sql(request.user.id), request.user.id]
+                    [get_user_block_sql(request.user.id), request.user.id, get_user_block_sql(request.user.id), request.user.id]
                 )
                 rows = cursor.fetchall()
 
