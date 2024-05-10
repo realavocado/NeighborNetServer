@@ -1,7 +1,6 @@
 import json
 
-from django.http import HttpResponse, JsonResponse, HttpRequest
-from django.shortcuts import render
+from django.http import HttpResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from .forms import CustomUserCreationForm, CustomUserLoginForm
 from django.contrib.auth import login, authenticate
@@ -101,7 +100,3 @@ def update_user_info(request):
         }, status=201)
     else:
         return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
-
-
-def home(request):
-    return render(request, 'home.html')
